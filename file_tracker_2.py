@@ -1,225 +1,222 @@
-
+import ttkbootstrap as tb
+from ttkbootstrap.constants import *
 import tkinter as tk
-from tkinter import ttk, messagebox
-import json
-import os
+from tkinter import messagebox
+import json, os
 from datetime import datetime
 
 DATA_FILE = "data.json"
 
+# Load or initialize data
+data = {}
 if os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "r") as f:
+    with open(DATA_FILE, 'r') as f:
         data = json.load(f)
-else:
-    data = {}
 
 def save_data():
-    with open(DATA_FILE, "w") as f:
+    with open(DATA_FILE, 'w') as f:
         json.dump(data, f, indent=4)
 
-class FileTrackerApp:
+class FileFlowApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("File / Project Tracker")
-        self.root.geometry("900x500")
-        self.showing_completed = False
-        self.selected_file_id = None
-        self.setup_ui()
+        self.root.title("FileFlow - Offline")
+        self.root.geometry("1020x650")
+        self.view_completed = False
 
-    def setup_ui(self):
-        self.toggle_btn = ttk.Button(self.root, text="🔁 View Completed Files", command=self.toggle_files)
-        self.toggle_btn.pack(side=tk.TOP, fill=tk.X)
+        self.create_ui()
+        self.refresh_file_list()
 
-        main_frame = ttk.Frame(self.root)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+    def create_ui(self):
+        # Top toolbar
+        top_frame = tb.Frame(self.root, padding=10)
+        top_frame.pack(fill=X)
 
-        self.left_frame = ttk.Frame(main_frame, width=400)
-        self.left_frame.pack(side=tk.LEFT, fill=tk.BOTH, padx=5, pady=5)
+        self.toggle_btn = tb.Button(top_frame, text="📁 View Completed Files", bootstyle=SECONDARY, command=self.toggle_view)
+        self.toggle_btn.pack(side=LEFT)
 
-        self.right_frame = ttk.Frame(main_frame)
-        self.right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        create_btn = tb.Button(top_frame, text="➕ Create New File", bootstyle=PRIMARY, command=self.create_new_file)
+        create_btn.pack(side=RIGHT)
 
-        self.file_list_label = ttk.Label(self.right_frame, text="Incomplete Files", font=("Arial", 12, "bold"))
-        self.file_list_label.pack(anchor="w")
+        self.tab_label = tb.Label(self.root, text="Incomplete Files", font=("Segoe UI", 14, "bold"), bootstyle=INFO)
+        self.tab_label.pack(anchor="w", padx=15, pady=(5, 0))
 
-        self.file_listbox = tk.Listbox(self.right_frame, width=40, height=25)
-        self.file_listbox.pack(fill=tk.BOTH, expand=True)
-        self.file_listbox.bind("<<ListboxSelect>>", self.display_selected_file)
+        # Card container
+        self.card_container = tb.Frame(self.root)
+        self.card_container.pack(fill=BOTH, expand=True, padx=15, pady=10)
 
-        self.timeline_display = tk.Text(self.left_frame, wrap="word", width=60)
-        self.timeline_display.pack(fill=tk.BOTH, expand=True)
-
-        self.bottom = ttk.Frame(self.root)
-        self.bottom.pack(side=tk.BOTTOM, fill=tk.X)
-
-        ttk.Button(self.bottom, text="➕ New Project", command=self.create_project).pack(side=tk.LEFT, padx=10, pady=10)
-        ttk.Button(self.bottom, text="✏️ Update Status", command=self.update_status).pack(side=tk.LEFT, padx=10)
-        ttk.Button(self.bottom, text="❌ Exit", command=self.root.quit).pack(side=tk.RIGHT, padx=10)
-
-        self.mark_button = ttk.Button(self.bottom, text="", command=self.toggle_completion_status)
-        self.mark_button.pack(side=tk.RIGHT, padx=10)
-        self.mark_button.pack_forget()
-
-        self.gd_button = ttk.Button(self.bottom, text="📝 GD Completed", command=self.mark_gd_completed)
-        self.gd_button.pack(side=tk.RIGHT, padx=10)
-        self.gd_button.pack_forget()
-
-        self.refresh_list()
-
-    def toggle_files(self):
-        self.showing_completed = not self.showing_completed
-        self.file_list_label.config(text="Completed Files" if self.showing_completed else "Incomplete Files")
-        self.toggle_btn.config(text="🔁 View Incomplete Files" if self.showing_completed else "🔁 View Completed Files")
-        self.refresh_list()
-        self.timeline_display.delete("1.0", tk.END)
-        self.mark_button.pack_forget()
-        self.gd_button.pack_forget()
-
-    def refresh_list(self):
-        self.file_listbox.delete(0, tk.END)
-        for fid, info in data.items():
-            is_completed = info["status"].lower() == "completed"
-            if is_completed == self.showing_completed:
-                self.file_listbox.insert(tk.END, f"{fid} - {info['title']}")
-
-    def display_selected_file(self, event):
-        if not self.file_listbox.curselection():
-            self.mark_button.pack_forget()
-            self.gd_button.pack_forget()
-            return
-        selected = self.file_listbox.get(self.file_listbox.curselection())
-        self.selected_file_id = selected.split(" - ")[0]
-        file = data[self.selected_file_id]
-        self.timeline_display.config(state="normal")
-        self.timeline_display.delete("1.0", tk.END)
-        self.timeline_display.insert(tk.END, f"File ID: {self.selected_file_id}\nTitle: {file['title']}\nStatus: {file['status']}\nHolder: {file['holder']}\n\nTimeline:\n")
-        for entry in file["timeline"]:
-            self.timeline_display.insert(tk.END, f"- {entry['timestamp']} | {entry['status']} | {entry['holder']} | {entry['remarks']}\n")
-        self.timeline_display.config(state="disabled")
-
-        if self.showing_completed:
-            self.mark_button.config(text="⬅️ Mark as Incomplete")
-            self.gd_button.pack_forget()
+    def toggle_view(self):
+        self.view_completed = not self.view_completed
+        if self.view_completed:
+            self.tab_label.config(text="Completed Files")
+            self.toggle_btn.config(text="📂 View Incomplete Files")
         else:
-            self.mark_button.config(text="✅ Mark as Completed")
-            self.gd_button.pack(side=tk.RIGHT, padx=10)
-        self.mark_button.pack(side=tk.RIGHT, padx=10)
+            self.tab_label.config(text="Incomplete Files")
+            self.toggle_btn.config(text="📁 View Completed Files")
+        self.refresh_file_list()
 
-    def toggle_completion_status(self):
-        if not self.selected_file_id:
-            return
-        file = data[self.selected_file_id]
-        new_status = "Completed" if not self.showing_completed else "In Progress"
-        remarks = "Marked as completed" if new_status == "Completed" else "Reopened"
-        file["status"] = new_status
-        file["timeline"].append({
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "status": new_status,
-            "holder": file["holder"],
-            "remarks": remarks
-        })
-        save_data()
-        self.refresh_list()
-        self.timeline_display.delete("1.0", tk.END)
-        self.mark_button.pack_forget()
-        self.gd_button.pack_forget()
+    def refresh_file_list(self):
+        for widget in self.card_container.winfo_children():
+            widget.destroy()
 
-    def mark_gd_completed(self):
-        if not self.selected_file_id:
-            return
-        file = data[self.selected_file_id]
-        file["status"] = "GD Signed"
-        file["holder"] = "Stores"
-        file["timeline"].append({
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "status": "GD Signed",
-            "holder": "Stores",
-            "remarks": "GD completed and forwarded to Stores"
-        })
-        save_data()
-        self.refresh_list()
-        self.timeline_display.delete("1.0", tk.END)
+        for file_id, info in data.items():
+            is_complete = info.get("status", "").lower() == "completed"
+            if is_complete != self.view_completed:
+                continue
+            self.create_file_card(file_id, info)
 
-    def create_project(self):
-        popup = tk.Toplevel(self.root)
+    def create_file_card(self, file_id, info):
+        frame = tb.Frame(self.card_container, relief="solid", borderwidth=1, padding=10)
+        frame.pack(fill=X, pady=6)
+
+        title = tb.Label(frame, text=info.get("title", "Untitled"), font=("Segoe UI", 12, "bold"))
+        title.pack(anchor="w")
+
+        id_label = tb.Label(frame, text=file_id, bootstyle=SECONDARY)
+        id_label.pack(anchor="w")
+
+        type_label = tb.Label(frame, text=info.get("type", ""), bootstyle=("light", "inverse"), padding=4)
+        type_label.pack(anchor="w", pady=2)
+
+        status_text = info.get("status", "")
+        status_label = tb.Label(frame, text=status_text, bootstyle="info")
+        status_label.pack(anchor="w")
+
+        holder = tb.Label(frame, text=f"Current Holder: {info.get('holder', '')}", bootstyle=SECONDARY)
+        holder.pack(anchor="w")
+
+        menu_btn = tb.Menubutton(frame, text="⋮", bootstyle=LIGHT)
+        menu = tk.Menu(menu_btn, tearoff=0)
+        menu.add_command(label="📜 View Timeline", command=lambda: self.view_timeline(file_id))
+        menu.add_command(label="✏️ Update Status", command=lambda: self.update_status(file_id))
+        if self.view_completed:
+            menu.add_command(label="🔁 Mark as Incomplete", command=lambda: self.mark_incomplete(file_id))
+        else:
+            menu.add_command(label="✅ Mark as Complete", command=lambda: self.mark_complete(file_id))
+            menu.add_command(label="📦 GD Completed", command=lambda: self.gd_complete(file_id))
+        menu_btn.config(menu=menu)
+        menu_btn.pack(anchor="e")
+
+    def create_new_file(self):
+        popup = tb.Toplevel(self.root)
         popup.title("Create New File")
-        popup.geometry("300x180")
+        popup.geometry("320x280")
 
-        ttk.Label(popup, text="File ID:").pack()
-        file_id_entry = ttk.Entry(popup)
-        file_id_entry.pack()
+        tb.Label(popup, text="File ID:").pack()
+        id_entry = tb.Entry(popup)
+        id_entry.pack()
 
-        ttk.Label(popup, text="Title:").pack()
-        title_entry = ttk.Entry(popup)
+        tb.Label(popup, text="File Name:").pack()
+        title_entry = tb.Entry(popup)
         title_entry.pack()
 
+        tb.Label(popup, text="File Type:").pack()
+        file_type = tb.Combobox(popup, values=["Cash Purchase", "Local Purchase"])
+        file_type.pack()
+
         def submit():
-            file_id = file_id_entry.get().strip()
+            fid = id_entry.get().strip()
             title = title_entry.get().strip()
-            if not file_id or file_id in data:
-                messagebox.showerror("Error", "Invalid or duplicate File ID.")
+            ftype = file_type.get().strip()
+            if fid in data:
+                messagebox.showerror("Error", "File ID already exists")
                 return
-            data[file_id] = {
+            data[fid] = {
                 "title": title,
-                "status": "In Progress",
-                "holder": "Origin",
-                "timeline": [{
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "status": "Created",
-                    "holder": "Origin",
-                    "remarks": "Initial creation"
-                }]
+                "type": ftype,
+                "status": "File Created",
+                "holder": "",
+                "timeline": [
+                    {"timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                     "status": "File Created",
+                     "holder": "",
+                     "remarks": f"New {ftype.lower()} file created."}
+                ]
             }
             save_data()
-            self.refresh_list()
             popup.destroy()
+            self.refresh_file_list()
 
-        ttk.Button(popup, text="Create", command=submit).pack(pady=10)
+        tb.Button(popup, text="Create", bootstyle=SUCCESS, command=submit).pack(pady=10)
 
-    def update_status(self):
-        popup = tk.Toplevel(self.root)
-        popup.title("Update File")
+    def update_status(self, fid):
+        popup = tb.Toplevel(self.root)
+        popup.title("Update Status")
         popup.geometry("300x220")
 
-        ttk.Label(popup, text="File ID:").pack()
-        file_id_entry = ttk.Entry(popup)
-        file_id_entry.pack()
-
-        ttk.Label(popup, text="New Status:").pack()
-        status_entry = ttk.Entry(popup)
+        tb.Label(popup, text="New Status").pack()
+        status_entry = tb.Entry(popup)
         status_entry.pack()
 
-        ttk.Label(popup, text="New Holder:").pack()
-        holder_entry = ttk.Entry(popup)
+        tb.Label(popup, text="Current Holder").pack()
+        holder_entry = tb.Entry(popup)
         holder_entry.pack()
 
-        ttk.Label(popup, text="Remarks:").pack()
-        remarks_entry = ttk.Entry(popup)
+        tb.Label(popup, text="Remarks (optional)").pack()
+        remarks_entry = tb.Entry(popup)
         remarks_entry.pack()
 
         def submit():
-            file_id = file_id_entry.get().strip()
-            if file_id not in data:
-                messagebox.showerror("Error", "File ID not found.")
-                return
-            entry = {
+            status = status_entry.get().strip()
+            holder = holder_entry.get().strip()
+            remarks = remarks_entry.get().strip()
+            data[fid]["status"] = status
+            data[fid]["holder"] = holder
+            data[fid]["timeline"].append({
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "status": status_entry.get().strip(),
-                "holder": holder_entry.get().strip(),
-                "remarks": remarks_entry.get().strip()
-            }
-            data[file_id]["status"] = entry["status"]
-            data[file_id]["holder"] = entry["holder"]
-            data[file_id]["timeline"].append(entry)
+                "status": status,
+                "holder": holder,
+                "remarks": remarks
+            })
             save_data()
-            self.refresh_list()
             popup.destroy()
+            self.refresh_file_list()
 
-        ttk.Button(popup, text="Update", command=submit).pack(pady=10)
+        tb.Button(popup, text="Update", bootstyle=PRIMARY, command=submit).pack(pady=10)
 
-# Run the app
-root = tk.Tk()
-style = ttk.Style()
-style.theme_use("clam")
-app = FileTrackerApp(root)
-root.mainloop()
+    def view_timeline(self, fid):
+        popup = tb.Toplevel(self.root)
+        popup.title(f"Timeline - {fid}")
+        popup.geometry("500x300")
+        text = tk.Text(popup, wrap="word")
+        text.pack(fill="both", expand=True)
+        for entry in data[fid]["timeline"]:
+            text.insert("end", f"{entry['status']}\n{entry['remarks']}\nBy {entry['holder']} on {entry['timestamp']}\n\n")
+        text.config(state="disabled")
+
+    def mark_complete(self, fid):
+        data[fid]["status"] = "Completed"
+        data[fid]["timeline"].append({
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "status": "Completed",
+            "holder": data[fid].get("holder", ""),
+            "remarks": "File marked as complete"
+        })
+        save_data()
+        self.refresh_file_list()
+
+    def mark_incomplete(self, fid):
+        data[fid]["status"] = "In Progress"
+        data[fid]["timeline"].append({
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "status": "In Progress",
+            "holder": data[fid].get("holder", ""),
+            "remarks": "File re-opened"
+        })
+        save_data()
+        self.refresh_file_list()
+
+    def gd_complete(self, fid):
+        data[fid]["status"] = "GD Signed"
+        data[fid]["holder"] = "Stores"
+        data[fid]["timeline"].append({
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "status": "GD Signed",
+            "holder": "Stores",
+            "remarks": "GD completed and sent to Stores"
+        })
+        save_data()
+        self.refresh_file_list()
+
+app = FileFlowApp(tb.Window(themename="flatly"))
+app.root.mainloop()
